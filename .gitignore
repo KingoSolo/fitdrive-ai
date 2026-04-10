@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 *.env
+.claude
+CLAUDE_CONTEXT.MD
+CLAUDE.MD
