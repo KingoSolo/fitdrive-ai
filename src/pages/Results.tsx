@@ -52,6 +52,11 @@ export default function Results() {
   const [activeView, setActiveView] = useState<ActiveView>('explore');
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [showCompare, setShowCompare] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const maxCarPrice = Math.max(...results.map((r: any) => r.car.price_usd));
+  const [filterMaxPrice, setFilterMaxPrice] = useState(maxCarPrice);
+  const [filterFeatures, setFilterFeatures] = useState<string[]>([]);
 
   // Height display
   const heightFt  = Math.floor(profile.heightInches / 12);
@@ -76,6 +81,21 @@ export default function Results() {
     return { label: 'Over Budget', className: 'bg-red-100 text-red-800' };
   }
 
+  // Shared filter: search query + price cap + required safety features
+  function applyGlobalFilters(list: any[]) {
+    const q = searchQuery.trim().toLowerCase();
+    return list.filter((r: any) => {
+      const car = r.car;
+      if (q && !`${car.brand} ${car.model} ${car.category}`.toLowerCase().includes(q)) return false;
+      if (car.price_usd > filterMaxPrice) return false;
+      if (filterFeatures.length > 0) {
+        const s = car.safety ?? {};
+        if (!filterFeatures.every((f) => s[f])) return false;
+      }
+      return true;
+    });
+  }
+
   // Explore: category + sort filter
   const exploreFiltered = (() => {
     let list = activeCategory === 'all'
@@ -84,16 +104,20 @@ export default function Results() {
     if (sortBy === 'score') list.sort((a: any, b: any) => b.totalScore - a.totalScore);
     else if (sortBy === 'price') list.sort((a: any, b: any) => a.car.price_usd - b.car.price_usd);
     else list.sort((a: any, b: any) => b.breakdown.safety - a.breakdown.safety);
-    return list;
+    return applyGlobalFilters(list);
   })();
 
   // Inventory: all cars sorted cheapest first
-  const inventoryList = [...results].sort((a: any, b: any) => a.car.price_usd - b.car.price_usd);
+  const inventoryList = applyGlobalFilters(
+    [...results].sort((a: any, b: any) => a.car.price_usd - b.car.price_usd)
+  );
 
   // Garage: saved cars
-  const garageList = results.filter((r: any) => savedIds.has(r.car.id));
+  const garageList = applyGlobalFilters(
+    results.filter((r: any) => savedIds.has(r.car.id))
+  );
 
-  // Top 3 for compare (always by score)
+  // Top 3 for compare (always by score, no filters)
   const top3 = [...results]
     .sort((a: any, b: any) => b.totalScore - a.totalScore)
     .slice(0, 3);
@@ -103,6 +127,9 @@ export default function Results() {
     : activeView === 'garage'
     ? garageList
     : exploreFiltered;
+
+  const activeFilterCount =
+    (filterMaxPrice < maxCarPrice ? 1 : 0) + filterFeatures.length;
 
   const pageTitle = activeView === 'garage'
     ? 'Your Garage'
@@ -145,7 +172,17 @@ export default function Results() {
         <div className="flex items-center gap-2">
           <div className="hidden md:flex bg-surface-container px-4 py-2 rounded-full items-center gap-2">
             <Search className="w-4 h-4 text-on-surface-variant" />
-            <input className="bg-transparent border-none focus:outline-none text-sm w-40" placeholder="Search cars..." />
+            <input
+              className="bg-transparent border-none focus:outline-none text-sm w-40"
+              placeholder="Search cars..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} className="text-on-surface-variant hover:text-on-surface">
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </div>
           <button className="p-2 rounded-full hover:bg-slate-100/50 transition-colors text-on-surface-variant">
             <Bell className="w-5 h-5" />
@@ -249,8 +286,16 @@ export default function Results() {
                     </button>
                   ))}
                 </div>
-                <button className="px-5 py-2.5 rounded-full bg-primary text-white text-sm font-semibold flex items-center gap-2 shadow-md">
+                <button
+                  onClick={() => setShowFilters(true)}
+                  className="relative px-5 py-2.5 rounded-full bg-primary text-white text-sm font-semibold flex items-center gap-2 shadow-md hover:bg-primary/90 transition-colors"
+                >
                   <SlidersHorizontal className="w-4 h-4" /> Filters
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-amber-400 text-white text-[10px] font-black flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
                 </button>
               </div>
             )}
@@ -372,8 +417,8 @@ export default function Results() {
               return (
                 <div
                   key={car.id}
-                  className="bg-surface-container-lowest rounded-[2rem] overflow-hidden shadow-ambient flex flex-col group border border-transparent hover:border-primary/10 transition-all duration-300 cursor-pointer"
-                  onClick={() => navigate(`/car/${car.id}`, { state: { result, profile } })}
+                  className={`bg-surface-container-lowest rounded-[2rem] overflow-hidden shadow-ambient flex flex-col group border border-transparent hover:border-primary/10 transition-all duration-300 ${!exploreMode ? 'cursor-pointer' : ''}`}
+                  onClick={() => !exploreMode && navigate(`/car/${car.id}`, { state: { result, profile } })}
                 >
                   {isBestMatch && (
                     <div
@@ -389,12 +434,15 @@ export default function Results() {
                       alt={`${car.brand} ${car.model}`}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                     />
-                    <div
-                      className="absolute top-4 left-4 text-white px-4 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase shadow-lg"
-                      style={{ background: 'linear-gradient(135deg, #0061a4 0%, #2196f3 100%)' }}
-                    >
-                      FitScore {totalScore}
-                    </div>
+                    {/* FitScore — personalised only */}
+                    {!exploreMode && (
+                      <div
+                        className="absolute top-4 left-4 text-white px-4 py-1.5 rounded-full text-xs font-bold tracking-widest uppercase shadow-lg"
+                        style={{ background: 'linear-gradient(135deg, #0061a4 0%, #2196f3 100%)' }}
+                      >
+                        FitScore {totalScore}
+                      </div>
+                    )}
                     <button
                       onClick={(e) => toggleSave(car.id, e)}
                       className={`absolute top-4 right-4 w-10 h-10 rounded-full backdrop-blur-md flex items-center justify-center transition-colors ${
@@ -420,24 +468,31 @@ export default function Results() {
                         <p className="text-lg font-extrabold text-on-surface">
                           ${car.price_usd.toLocaleString()}
                         </p>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
-                          {badge.label}
-                        </span>
+                        {/* Budget badge — personalised only */}
+                        {!exploreMode && (
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${badge.className}`}>
+                            {badge.label}
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 mb-4">
-                      {[
-                        { label: 'Ergonomic', val: breakdown.ergonomic },
-                        { label: 'Visibility', val: breakdown.visibility },
-                        { label: 'Safety',     val: breakdown.safety },
-                      ].map(({ label, val }) => (
-                        <div key={label} className="bg-surface-container-low rounded-lg p-2 text-center">
-                          <div className="text-lg font-black text-on-surface">{val}</div>
-                          <div className="text-[10px] text-on-surface-variant font-medium">{label}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {prosAndCons?.pros?.length > 0 && (
+                    {/* Score breakdown — personalised only */}
+                    {!exploreMode && (
+                      <div className="grid grid-cols-3 gap-2 mb-4">
+                        {[
+                          { label: 'Ergonomic', val: breakdown.ergonomic },
+                          { label: 'Visibility', val: breakdown.visibility },
+                          { label: 'Safety',     val: breakdown.safety },
+                        ].map(({ label, val }) => (
+                          <div key={label} className="bg-surface-container-low rounded-lg p-2 text-center">
+                            <div className="text-lg font-black text-on-surface">{val}</div>
+                            <div className="text-[10px] text-on-surface-variant font-medium">{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Pros — personalised only */}
+                    {!exploreMode && prosAndCons?.pros?.length > 0 && (
                       <div className="mb-4 space-y-1">
                         {prosAndCons.pros.slice(0, 2).map((pro: string, i: number) => (
                           <div key={i} className="flex items-start gap-2 text-xs text-emerald-700">
@@ -447,15 +502,24 @@ export default function Results() {
                         ))}
                       </div>
                     )}
-                    <button
-                      className="mt-auto w-full py-3 rounded-xl text-sm font-bold text-primary border-2 border-primary/20 hover:bg-primary/5 transition-colors active:scale-95 flex items-center justify-center gap-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/car/${car.id}`, { state: { result, profile } });
-                      }}
-                    >
-                      View Details <ArrowRight className="w-4 h-4" />
-                    </button>
+                    {/* Explore mode: neutral spec summary */}
+                    {exploreMode && (
+                      <div className="mt-2 mb-4 space-y-1 text-xs text-on-surface-variant">
+                        <div>Headroom: {car.specs?.front_headroom_in}"</div>
+                        <div>Visibility: {car.visibility?.score}/10 · Handling: {car.handling?.difficulty}/10</div>
+                      </div>
+                    )}
+                    {!exploreMode && (
+                      <button
+                        className="mt-auto w-full py-3 rounded-xl text-sm font-bold text-primary border-2 border-primary/20 hover:bg-primary/5 transition-colors active:scale-95 flex items-center justify-center gap-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/car/${car.id}`, { state: { result, profile } });
+                        }}
+                      >
+                        View Details <ArrowRight className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -495,6 +559,104 @@ export default function Results() {
           <TrendingUp className="w-5 h-5" />
           Compare Top 3
         </button>
+      )}
+
+      {/* Filter panel */}
+      {showFilters && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
+          onClick={() => setShowFilters(false)}
+        >
+          <div
+            className="bg-white w-full max-w-sm h-full overflow-y-auto shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold font-headline text-on-surface">Filters</h2>
+              <div className="flex items-center gap-3">
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={() => { setFilterMaxPrice(maxCarPrice); setFilterFeatures([]); }}
+                    className="text-xs font-bold text-primary hover:underline"
+                  >
+                    Clear all
+                  </button>
+                )}
+                <button onClick={() => setShowFilters(false)} className="p-1.5 rounded-full hover:bg-slate-100 transition-colors">
+                  <X className="w-5 h-5 text-on-surface-variant" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 px-6 py-6 space-y-8">
+              {/* Max price */}
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-bold text-on-surface">Max Price</h3>
+                  <span className="text-sm font-bold text-primary">${filterMaxPrice.toLocaleString()}</span>
+                </div>
+                <input
+                  type="range"
+                  min={Math.min(...results.map((r: any) => r.car.price_usd))}
+                  max={maxCarPrice}
+                  step={1000}
+                  value={filterMaxPrice}
+                  onChange={(e) => setFilterMaxPrice(Number(e.target.value))}
+                  className="w-full accent-primary"
+                />
+                <div className="flex justify-between text-xs text-on-surface-variant mt-1">
+                  <span>${Math.min(...results.map((r: any) => r.car.price_usd)).toLocaleString()}</span>
+                  <span>${maxCarPrice.toLocaleString()}</span>
+                </div>
+              </div>
+
+              {/* Safety features */}
+              <div>
+                <h3 className="text-sm font-bold text-on-surface mb-3">Must-Have Safety Features</h3>
+                <div className="space-y-2">
+                  {[
+                    { key: 'has_auto_emergency_braking', label: 'Auto Emergency Braking' },
+                    { key: 'has_lane_assist',            label: 'Lane-Keeping Assist' },
+                    { key: 'has_blind_spot_monitor',     label: 'Blind Spot Monitor' },
+                    { key: 'has_parking_sensors',        label: 'Parking Sensors' },
+                    { key: 'has_adaptive_cruise',        label: 'Adaptive Cruise Control' },
+                  ].map(({ key, label }) => {
+                    const checked = filterFeatures.includes(key);
+                    return (
+                      <label key={key} className="flex items-center gap-3 cursor-pointer group">
+                        <div
+                          className={`w-5 h-5 rounded flex items-center justify-center border-2 transition-colors flex-shrink-0 ${
+                            checked ? 'bg-primary border-primary' : 'border-slate-300 group-hover:border-primary/50'
+                          }`}
+                          onClick={() =>
+                            setFilterFeatures((prev) =>
+                              checked ? prev.filter((f) => f !== key) : [...prev, key]
+                            )
+                          }
+                        >
+                          {checked && <span className="text-white text-[10px] font-black">✓</span>}
+                        </div>
+                        <span className="text-sm text-on-surface">{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Apply button */}
+            <div className="px-6 py-5 border-t border-slate-100">
+              <button
+                onClick={() => setShowFilters(false)}
+                className="w-full py-3 rounded-xl text-white font-bold text-sm"
+                style={{ background: 'linear-gradient(135deg, #0061a4 0%, #2196f3 100%)' }}
+              >
+                Show {filtered.length} results
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Compare modal */}
