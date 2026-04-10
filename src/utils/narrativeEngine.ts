@@ -349,7 +349,7 @@ const RULES: Rule[] = [
     condition: (car, p) => car.price_usd <= p.budget * 0.75,
     variants: [
       (car, p) => `At $${car.price_usd.toLocaleString()}, it lands well within your $${p.budget.toLocaleString()} budget — leaving meaningful room for running costs or extras.`,
-      (car, p) => `The $${car.price_usd.toLocaleString()} price tag gives you a comfortable buffer under your ceiling, which is always worth having.`,
+      (car, _p) => `The $${car.price_usd.toLocaleString()} price tag gives you a comfortable buffer under your ceiling, which is always worth having.`,
       (car, p) => `Priced at $${car.price_usd.toLocaleString()}, there's a healthy financial gap beneath your $${p.budget.toLocaleString()} limit.`,
     ],
   },
@@ -358,8 +358,8 @@ const RULES: Rule[] = [
     condition: (car, p) =>
       car.price_usd > p.budget * 0.75 && car.price_usd <= p.budget,
     variants: [
-      (car, p) => `At $${car.price_usd.toLocaleString()}, it fits within your budget though without a lot left to spare.`,
-      (car, p) => `The price sits within your $${p.budget.toLocaleString()} ceiling, using a fair portion of your available range.`,
+      (car, _p) => `At $${car.price_usd.toLocaleString()}, it fits within your budget though without a lot left to spare.`,
+      (_c, p) => `The price sits within your $${p.budget.toLocaleString()} ceiling, using a fair portion of your available range.`,
     ],
   },
   {
@@ -376,7 +376,7 @@ const RULES: Rule[] = [
     condition: (car, p) => car.price_usd > p.budget * 1.15,
     variants: [
       (car, p) => `The $${car.price_usd.toLocaleString()} price tag runs notably above your $${p.budget.toLocaleString()} budget — factor in whether the features justify the premium.`,
-      (_c, p) => `This one stretches meaningfully beyond your budget; carefully weigh the benefits against the extra financial outlay.`,
+      () => `This one stretches meaningfully beyond your budget; carefully weigh the benefits against the extra financial outlay.`,
     ],
   },
 ];
