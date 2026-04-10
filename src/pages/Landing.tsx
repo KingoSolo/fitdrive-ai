@@ -1,5 +1,7 @@
-import { Sparkles, ArrowRight, Eye, ShieldCheck, Bell, Settings, PersonStanding } from 'lucide-react';
+import { Sparkles, ArrowRight, Eye, ShieldCheck, PersonStanding } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import cars from '../data/cars.json';
+import { rankCarsForDriver, generateProsAndCons } from '../algorithm/scoring.js';
 
 const features = [
   {
@@ -22,8 +24,6 @@ const features = [
   },
 ];
 
-const navLinks = ['Dashboard', 'Workouts', 'Nutrition', 'Community'];
-
 export default function Landing() {
   const navigate = useNavigate();
 
@@ -32,35 +32,23 @@ export default function Landing() {
       {/* Navigation */}
       <header className="sticky top-0 z-50 h-16 bg-white border-b border-[#E2E8F0]">
         <div className="max-w-7xl mx-auto px-6 md:px-8 h-full flex items-center justify-between">
-          {/* Logo */}
-          <span className="font-space-grotesk font-bold text-lg text-[#0F172A] w-40">FitDrive AI</span>
+          <span className="font-space-grotesk font-bold text-lg text-[#0F172A]">FitDrive AI</span>
 
-          {/* Center nav */}
           <nav className="hidden md:flex items-center gap-8">
-            {navLinks.map((link) => (
-              <a
-                key={link}
-                href="#"
-                className={`text-sm font-medium transition-colors pb-0.5 ${
-                  link === 'Dashboard'
-                    ? 'text-[#2196F3] border-b-2 border-[#2196F3]'
-                    : 'text-[#475569] hover:text-[#0F172A]'
-                }`}
-              >
-                {link}
-              </a>
-            ))}
+            <a href="#features" className="text-sm font-medium text-[#475569] hover:text-[#0F172A] transition-colors">
+              Features
+            </a>
+            <a href="#how-it-works" className="text-sm font-medium text-[#475569] hover:text-[#0F172A] transition-colors">
+              How it Works
+            </a>
           </nav>
 
-          {/* Icons */}
-          <div className="flex items-center gap-2 w-40 justify-end">
-            <button className="p-2 rounded-lg hover:bg-[#F1F5F9] transition-colors text-[#475569]">
-              <Bell className="w-5 h-5" />
-            </button>
-            <button className="p-2 rounded-lg hover:bg-[#F1F5F9] transition-colors text-[#475569]">
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            onClick={() => navigate('/onboarding')}
+            className="inline-flex items-center gap-2 bg-[#2196F3] text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-[#1976D2] transition-colors"
+          >
+            Get Started <ArrowRight className="w-4 h-4" />
+          </button>
         </div>
       </header>
 
@@ -92,7 +80,24 @@ export default function Landing() {
                 Find My Perfect Car
                 <ArrowRight className="w-4 h-4" />
               </button>
-              <button className="text-[#2196F3] font-semibold px-4 py-3.5 hover:underline transition-all">
+              <button
+                onClick={() => {
+                  const defaultProfile = {
+                    heightInches: 68,
+                    eyeCondition: 'none',
+                    experienceLevel: 'intermediate',
+                    budget: 60000,
+                    otherConditions: [],
+                  };
+                  const ranked = rankCarsForDriver(cars, defaultProfile, 60);
+                  const results = ranked.map((r: any) => ({
+                    ...r,
+                    prosAndCons: generateProsAndCons(r, defaultProfile),
+                  }));
+                  navigate('/results', { state: { profile: defaultProfile, results, exploreMode: true } });
+                }}
+                className="text-[#2196F3] font-semibold px-4 py-3.5 hover:underline transition-all"
+              >
                 Explore Fleet
               </button>
             </div>
@@ -128,7 +133,7 @@ export default function Landing() {
         </section>
 
         {/* Features */}
-        <section className="py-20 mt-6">
+        <section id="features" className="py-20 mt-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature) => (
               <div
